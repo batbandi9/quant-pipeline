@@ -1,0 +1,59 @@
+\chapter{Feature Engineering}
+
+\section{Causal, token-resolved indicators}
+
+Every function in \texttt{qp.features.technical} takes a wide close panel
+(index = date, columns = symbol) and returns a same-shaped panel where row $t$
+depends only on data up to and including $t$ -- there is no indicator in this
+module that can see the future.
+
+\begin{table}[h]
+\footnotesize
+\centering
+\begin{tabularx}{\textwidth}{L{2.2cm} L{2.6cm} X}
+\toprule
+\thh{Token} & \thh{Formula} & \thh{Reads} \\
+\midrule
+\texttt{ret\_n} & $\ln P_t - \ln P_{t-n}$ & $n$-day log return \\
+\texttt{vol\_n} & $\mathrm{std}_n(\Delta \ln P)\sqrt{252}$ & annualised realised volatility \\
+\texttt{mom\_n} & $P_{t-\text{skip}}/P_{t-n-\text{skip}} - 1$ & trailing return, skipping the most recent \texttt{skip} days (avoids the well-known 1-week reversal contaminating a momentum signal) \\
+\texttt{zscore\_n} & $(P_t - \mathrm{MA}_n)/\mathrm{SD}_n$ & distance from the rolling mean, in standard deviations \\
+\texttt{rsi\_n} & $100 - 100/(1+RS)$, $RS = \overline{\Delta^+}_n / \overline{\Delta^-}_n$ & Wilder's relative strength index \\
+\texttt{macd} & $\mathrm{EMA}_{12} - \mathrm{EMA}_{26}$, minus its own 9-day EMA & MACD histogram \\
+\texttt{bbp\_n} & $(P_t - L_n)/(U_n - L_n)$, $U/L = \mathrm{MA}_n \pm 2\,\mathrm{SD}_n$ & \%B: position within the Bollinger band \\
+\texttt{skew\_n} & rolling skewness of log-returns & tail asymmetry \\
+\bottomrule
+\end{tabularx}
+\caption{Token grammar: \texttt{"<base>\_<window>"} resolves via a small registry
+in \texttt{compute()}; a config just lists tokens like \texttt{mom\_60, rsi\_14}.}
+\end{table}
+
+\section{Building an ML dataset without leaking the future}
+
+\texttt{build\_ml\_dataset(close, tokens, horizon)} produces a tidy
+$(X, y)$ pair indexed by \texttt{(date, symbol)}:
+
+\begin{lstlisting}
+fwd = close.shift(-horizon) / close - 1.0   # row t: return realised over (t, t+horizon]
+y   = fwd.stack()
+X   = pd.concat([compute(tok, close).stack() for tok in tokens], axis=1)
+df  = X.join(y, how="inner").dropna()
+\end{lstlisting}
+
+Two guarantees follow directly from this construction and are exercised by
+\texttt{tests/test\_data\_features.py::test\_ml\_dataset\_no\_leakage}:
+
+\begin{enumerate}
+  \item every feature at row $(t, s)$ is computable from data available at the
+  close of day $t$;
+  \item the label at row $(t, s)$ is a \emph{forward} return, so the final
+  \texttt{horizon} dates in the sample have no label and are dropped -- a model
+  trained on this frame cannot see its own target.
+\end{enumerate}
+
+\begin{designnote}
+The no-leakage property is enforced structurally (by the shift and the inner
+join), not by convention or a code-review checklist. This is the single most
+common way a backtest lies to its author, so it is worth making impossible
+rather than merely discouraged.
+\end{designnote}

@@ -1,0 +1,43 @@
+# data & run artefacts
+data/
+runs/
+*.parquet
+*.csv
+!configs/*.csv
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# state
+execution_state/
+*.log
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/
+
+# LaTeX aux (docs/) -- keep docs/main.pdf
+docs/*.aux
+docs/*.bbl
+docs/*.bcf
+docs/*.blg
+docs/*.fdb_latexmk
+docs/*.fls
+docs/*.log
+docs/*.out
+docs/*.run.xml
+docs/*.synctex.gz
+docs/*.toc
+docs/sections/*.aux

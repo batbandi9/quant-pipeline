@@ -1,0 +1,61 @@
+\chapter{Validation Methodology}
+
+Standard $K$-fold cross-validation assumes exchangeable, independent samples.
+Financial time series are neither: adjacent rows overlap (a 5-day forward
+return at $t$ and at $t+1$ share four days of data), so a naive random split
+leaks the future into the training set through that overlap. \texttt{qp.validation}
+implements two splitters that respect time ordering and remove the overlap.
+
+\section{Walk-forward}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[node distance=2mm]
+  \foreach \x/\lbl/\col in {0/train/QpSteel, 3.6/embargo/QpRed, 4.1/test/QpGreen} {}
+  \draw[fill=QpSteel!25, draw=QpSteel] (0,0) rectangle (3.6,0.7) node[midway]{\small train};
+  \draw[fill=QpRed!25, draw=QpRed] (3.6,0) rectangle (4.0,0.7);
+  \draw[fill=QpGreen!25, draw=QpGreen] (4.0,0) rectangle (5.2,0.7) node[midway]{\small test};
+
+  \draw[fill=QpSteel!25, draw=QpSteel] (1.2,-1.1) rectangle (4.8,-0.4) node[midway]{\small train};
+  \draw[fill=QpRed!25, draw=QpRed] (4.8,-1.1) rectangle (5.2,-0.4);
+  \draw[fill=QpGreen!25, draw=QpGreen] (5.2,-1.1) rectangle (6.4,-0.4) node[midway]{\small test};
+
+  \draw[fill=QpSteel!25, draw=QpSteel] (2.4,-2.2) rectangle (6.0,-1.5) node[midway]{\small train};
+  \draw[fill=QpRed!25, draw=QpRed] (6.0,-2.2) rectangle (6.4,-1.5);
+  \draw[fill=QpGreen!25, draw=QpGreen] (6.4,-2.2) rectangle (7.6,-1.5) node[midway]{\small test};
+
+  \draw[-{Stealth}] (-0.3,-2.8) -- (8.0,-2.8) node[right]{\small time};
+\end{tikzpicture}
+\caption{\texttt{walk\_forward(dates, train\_days, test\_days, step\_days, embargo\_days)}.
+The window slides forward by \texttt{step\_days} each iteration; the red embargo
+gap between train and test is at least as long as the label horizon, so no
+training row's label overlaps a test-period date.}
+\end{figure}
+
+\texttt{MLSignal} and \texttt{SequenceSignal} both consume this splitter directly.
+For each window they train fresh (no state carried across windows -- a
+deliberate choice: it exercises the model's ability to relearn from only recent
+regime data, which is closer to how a live system would operate) and predict
+on the test window only; the concatenation of all test predictions is the
+out-of-sample score series used everywhere downstream.
+
+\section{Purged $K$-fold}
+
+\texttt{purged\_kfold(dates, n\_splits, embargo\_days)} implements the
+Lopez-de-Prado-style alternative: split the date range into $K$ contiguous test
+folds, and for each fold drop every training row within \texttt{embargo\_days}
+of that fold's boundary on either side. This is available for parameter
+studies where multiple folds are needed cheaply; the pipeline's default
+(\texttt{validation.scheme: walk\_forward}) is the more realistic choice for
+anything that will inform a live decision, because it never trains on data from
+after the period it is being evaluated on -- purged $K$-fold's later folds can
+still train on data that is chronologically after an earlier test fold, which
+walk-forward never does.
+
+\begin{designnote}
+The embargo is not cosmetic. With a 5-day forward-return target and no embargo,
+a model can partially ``see'' test-period information through overlapping
+labels at the train/test boundary -- a subtle leak that inflates backtested
+Sharpe without ever showing up as an obvious bug. Setting
+\texttt{embargo\_days} $\geq$ the label horizon closes it structurally.
+\end{designnote}

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "qp": {
+      "command": "python",
+      "args": ["mcp/server.py"],
+      "cwd": "/Users/batbandigerelkhuu/Master-PyPSA/quant-pipeline"
+    }
+  }
+}

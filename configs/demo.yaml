@@ -1,0 +1,54 @@
+# End-to-end demo on synthetic data. `qp backtest -c configs/demo.yaml`
+name: demo
+seed: 7
+
+data:
+  source: synthetic          # synthetic | csv | yfinance | stooq
+  symbols: [AAA, BBB, CCC, DDD, EEE, FFF, GGG, HHH]
+  start: "2013-01-01"
+  end: "2024-12-31"
+  synthetic:
+    mu: 0.06
+    sigma: 0.20
+    regime_switch: true
+    corr: 0.3
+
+features: [ret_1, vol_20, mom_60, mom_120, rsi_14, zscore_20, macd, bbp_20]
+
+signal:
+  type: cross_sectional_momentum   # momentum | mean_reversion | cross_sectional_momentum | ml | sequence
+  params:
+    lookback: 60
+    skip: 5
+
+portfolio:
+  sizing: vol_target        # fixed | vol_target | risk_parity
+  target_vol: 0.10
+  max_weight: 0.30
+  gross_leverage: 1.0
+  long_only: false
+  rebalance: weekly
+
+costs:
+  commission_bps: 1.0
+  half_spread_bps: 2.0
+  borrow_bps_annual: 50.0
+  slippage_bps: 0.0
+
+risk:
+  max_drawdown_stop: 0.25
+  max_gross: 1.5
+  max_position: 0.35
+  vol_lookback: 20
+
+validation:
+  scheme: walk_forward
+  train_days: 756
+  test_days: 63
+  step_days: 63
+  embargo_days: 5
+
+execution:
+  broker: paper
+  starting_equity: 100000
+  state_dir: execution_state

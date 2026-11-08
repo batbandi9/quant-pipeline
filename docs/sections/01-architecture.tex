@@ -1,0 +1,71 @@
+\chapter{System Architecture}
+
+\section{The stage pipeline}
+
+A run is one YAML file (\texttt{configs/*.yaml}) interpreted by a chain of
+pure, testable stages. Each stage reads only the sub-model of \texttt{RunConfig}
+it needs, so configs stay flat and reviewable, and each stage can be tested in
+isolation with synthetic inputs.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[node distance=7mm]
+  \node[stage] (cfg)  {config};
+  \node[stage, right=of cfg]  (dat)  {data};
+  \node[stage, right=of dat]  (feat) {features};
+  \node[stage, right=of feat] (sig)  {signals};
+  \node[stage, right=of sig]  (val)  {validation};
+  \draw[flowarr] (cfg)--(dat); \draw[flowarr] (dat)--(feat);
+  \draw[flowarr] (feat)--(sig); \draw[flowarr] (sig)--(val);
+
+  \node[stage, below=13mm of val] (bt)   {backtest};
+  \node[stage, left=of bt]  (risk) {risk};
+  \node[stage, left=of risk] (exec) {execution};
+  \node[stage, left=of exec] (rep)  {report};
+  \node[stage, left=of rep]  (live) {live loop};
+  \draw[flowarr] (val.south) -- (bt.north);
+  \draw[flowarr] (bt)--(risk); \draw[flowarr] (risk)--(exec);
+  \draw[flowarr] (exec)--(rep); \draw[flowarr] (rep)--(live);
+
+  \node[stagealt, below=13mm of live] (mcp) {mcp/server.py};
+  \draw[flowarr] (live.south) -- (mcp.north);
+  \node[note, right=4mm of mcp, text width=6.4cm] {exposes \texttt{run\_backtest},
+    \texttt{paper\_iteration}, \texttt{list\_runs}, \ldots{} to any MCP client};
+\end{tikzpicture}
+\caption{The eleven modules of \texttt{src/qp/}, in call order. The bottom row
+reads right to left to keep the diagram compact; data still flows
+backtest~$\to$~risk~$\to$~execution~$\to$~report~$\to$~live.}
+\end{figure}
+
+\section{Orchestration}
+
+\texttt{qp.pipeline.run\_pipeline(cfg)} is the single entry point used by the
+CLI's \texttt{demo} and \texttt{backtest} commands:
+
+\begin{lstlisting}
+long_df = load_prices(cfg.data)                  # data
+close   = to_wide(long_df, "close")
+signal  = make_signal(cfg.signal, cfg.features, cfg.validation)
+scores  = signal.generate(close)                 # features + signals (fused)
+result  = run_backtest(close, scores, cfg)        # validation + backtest + risk
+write_tearsheet(result, cfg.run_dir())           # report
+\end{lstlisting}
+
+\texttt{qp.live.loop.run\_once(cfg)} reuses the same \texttt{data}, \texttt{features},
+and \texttt{signals} code, then diverges into \texttt{execution} instead of
+\texttt{backtest} -- the live loop and the backtester are guaranteed to compute
+the same target weights from the same signal, because they call the same
+functions.
+
+\section{Why this shape}
+
+\begin{designnote}
+Every stage is a pure function or a small class with one public method
+(\texttt{generate}, \texttt{fetch}, \texttt{rebalance\_to}). Nothing reaches into
+another stage's internals. That buys three things directly relevant to career
+capital: (1) each stage is unit-testable against synthetic data without a
+network or a broker; (2) a new signal, data source, or broker is additive, not
+a rewrite; (3) the same code path serves the backtester and the live loop, so
+there is no ``it worked in backtest but not live'' class of bug from divergent
+implementations.
+\end{designnote}

@@ -1,0 +1,65 @@
+\chapter{Configuration Reference and File Map}
+
+\section{\texttt{RunConfig} schema}
+
+\begin{longtable}{L{2.6cm} L{3.6cm} L{8.4cm}}
+\toprule
+\thh{Section} & \thh{Key fields} & \thh{Notes} \\
+\midrule
+\endfirsthead
+\toprule
+\thh{Section} & \thh{Key fields} & \thh{Notes} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\texttt{data} & \texttt{source, symbols, start, end, synthetic.*, cache} & source $\in$ \{synthetic, csv, yfinance, stooq\} \\
+\texttt{features} & a list of tokens & e.g.\ \texttt{[ret\_1, vol\_20, mom\_60, rsi\_14]} \\
+\texttt{signal} & \texttt{type, params} & type $\in$ \{momentum, mean\_reversion, cross\_sectional\_momentum, ml, sequence\} \\
+\texttt{portfolio} & \texttt{sizing, target\_vol, max\_weight, gross\_leverage, long\_only, rebalance, vol\_lookback, max\_leverage\_scale} & sizing $\in$ \{fixed, vol\_target, risk\_parity\} \\
+\texttt{costs} & \texttt{commission\_bps, half\_spread\_bps, borrow\_bps\_annual, slippage\_bps} & all in basis points \\
+\texttt{risk} & \texttt{max\_drawdown\_stop, max\_gross, max\_position, vol\_lookback} & drawdown stop $= 0$ disables the kill-switch \\
+\texttt{validation} & \texttt{scheme, train\_days, test\_days, step\_days, embargo\_days, n\_splits} & consumed by \texttt{ml} / \texttt{sequence} signals \\
+\texttt{execution} & \texttt{broker, starting\_equity, state\_dir} & broker $\in$ \{paper, alpaca (stub)\} \\
+\texttt{seed} & one integer & propagates to \texttt{data.synthetic.seed} and every model's RNG \\
+\end{longtable}
+
+\section{File map}
+
+\begin{longtable}{L{5.0cm} L{9.6cm}}
+\toprule
+\thh{Path} & \thh{Contents} \\
+\midrule
+\endfirsthead
+\toprule
+\thh{Path} & \thh{Contents} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\texttt{src/qp/config.py} & pydantic models, one per stage; \texttt{RunConfig.from\_yaml} \\
+\texttt{src/qp/data/} & \texttt{base.py} (contract), \texttt{synthetic.py}, \texttt{csv\_source.py}, \texttt{remote.py} (yfinance/stooq), \texttt{store.py} (parquet cache) \\
+\texttt{src/qp/features/} & \texttt{technical.py} (indicators + token registry), \texttt{pipeline.py} (panels, ML dataset) \\
+\texttt{src/qp/signals/} & \texttt{base.py}, \texttt{rules.py}, \texttt{ml.py}, \texttt{sequence.py}, factory in \texttt{\_\_init\_\_.py} \\
+\texttt{src/qp/validation/splits.py} & \texttt{walk\_forward}, \texttt{purged\_kfold} \\
+\texttt{src/qp/backtest/} & \texttt{engine.py}, \texttt{portfolio.py}, \texttt{costs.py}, \texttt{metrics.py} \\
+\texttt{src/qp/risk/limits.py} & pre-trade weight limits \\
+\texttt{src/qp/execution/} & \texttt{base.py}, \texttt{paper.py}, \texttt{alpaca.py} (stub) \\
+\texttt{src/qp/report/tearsheet.py} & PNG + text report + metrics.json + parquet artefacts \\
+\texttt{src/qp/live/loop.py} & \texttt{run\_once}, \texttt{run\_forever} \\
+\texttt{src/qp/pipeline.py} & the orchestrator used by the CLI \\
+\texttt{src/qp/cli.py} & \texttt{qp demo / backtest / data / walkforward / paper / report} \\
+\texttt{mcp/server.py}, \texttt{mcp/README.md} & the agent layer and its design notes \\
+\texttt{configs/demo.yaml}, \texttt{configs/ml\_walkforward.yaml} & runnable configs referenced throughout this document \\
+\texttt{tests/} & 13 tests: data/feature integrity, no-lookahead, cost drag, drawdown stop, paper-broker persistence, end-to-end pipeline \\
+\end{longtable}
+
+\section{Reproducing this document's numbers}
+
+\begin{cli}
+cd quant-pipeline\\
+pip install -e .\\
+make test\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \# 13 passed\\
+qp demo\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \# Chapter 8, Table 8.1 + Figure 8.1\\
+qp walkforward -c configs/demo.yaml\ \# Chapter 8, Table 8.2
+\end{cli}

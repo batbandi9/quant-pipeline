@@ -1,0 +1,67 @@
+\chapter{Execution and the Live Loop}
+
+\section{The broker contract}
+
+\texttt{qp.execution.base.Broker} is four methods: \texttt{equity()},
+\texttt{positions()}, \texttt{mark(prices)}, \texttt{rebalance\_to(target\_weights, prices)}.
+The live loop only ever thinks in target weights; a broker implementation is
+responsible for turning a weight vector into orders against its own current
+positions.
+
+\section{The paper broker}
+
+\texttt{PaperBroker} is the default and, at this stage of the project, the only
+broker that actually works. It holds cash and per-symbol share quantities in
+memory, fills at the supplied price plus a symmetric slippage in basis points,
+charges a commission, and -- critically -- persists its full state
+(\texttt{cash}, \texttt{positions}, \texttt{last\_prices}, the last 500 fills) to
+\texttt{execution\_state/<name>.json} after every rebalance:
+
+\begin{lstlisting}
+target_qty = (weight * equity) / price
+delta      = target_qty - current_qty
+fill_price = price * (1 + sign(delta) * slippage_bps / 1e4)
+commission = abs(delta * fill_price) * commission_bps / 1e4
+cash      -= delta * fill_price + commission
+\end{lstlisting}
+
+Because state is persisted, a fresh \texttt{PaperBroker(name=...)} constructed
+later -- in a new process, after a reboot, from a cron job -- resumes exactly
+where the last one left off. \texttt{tests/test\_pipeline\_exec.py::test\_paper\_broker\_rebalance\_and\_resume}
+exercises this directly: two independently constructed broker instances sharing
+a state directory see the same equity.
+
+\section{The live loop}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[node distance=6mm]
+  \node[stage] (a) {pull prices};
+  \node[stage, below=of a] (b) {compute features + signal};
+  \node[stage, below=of b] (c) {target weights (risk-limited)};
+  \node[stage, below=of c] (d) {reconcile vs.\ broker positions};
+  \node[stage, below=of d] (e) {submit orders};
+  \node[stage, below=of e] (f) {record: fills, snapshot, JSONL log};
+  \draw[flowarr] (a)--(b); \draw[flowarr] (b)--(c); \draw[flowarr] (c)--(d);
+  \draw[flowarr] (d)--(e); \draw[flowarr] (e)--(f);
+\end{tikzpicture}
+\caption{\texttt{qp.live.loop.run\_once(cfg)}. Safe to call from cron:
+each call is a self-contained iteration that ends by writing one JSON line to
+\texttt{execution\_state/<name>.loop.jsonl} and the broker's own state file.
+\texttt{run\_forever} is a thin \texttt{time.sleep} wrapper around the same
+function for a long-running process.}
+\end{figure}
+
+The loop reuses the exact \texttt{load\_prices} / \texttt{make\_signal} /
+\texttt{build\_weights} / \texttt{apply\_limits} functions the backtester uses
+(Chapter~1) -- there is one implementation of ``turn a signal into a target
+book,'' not two that could silently diverge.
+
+\section{The real-broker stub}
+
+\texttt{execution/alpaca.py} exists and raises \texttt{NotImplementedError} on
+construction, with the wiring instructions in its docstring. This is deliberate,
+not an oversight: the point at which paper trading has produced months of
+consistent, believable results is the point at which wiring a live broker is a
+conscious decision, not an accident of a config flag left on the wrong value.
+Every bundled config defaults to \texttt{execution.broker: paper}.

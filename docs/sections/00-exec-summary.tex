@@ -1,0 +1,59 @@
+\chapter*{Executive Summary}
+\addcontentsline{toc}{chapter}{Executive Summary}
+\markboth{Executive Summary}{Executive Summary}
+
+\texttt{qp} is a full systematic-trading research pipeline: configuration,
+data ingestion, feature engineering, alpha signals, walk-forward validation,
+a cost-aware vectorised backtester, pre-trade risk limits, a paper-trading
+broker, reporting, and a live-loop orchestrator -- with a Model Context
+Protocol (MCP) server on top so an agent can drive the whole thing. It is
+roughly 2{,}400 lines of Python across 30 modules, has 13 passing tests, and
+runs clean under \texttt{ruff}.
+
+\section*{Why this exists}
+
+Not to make money trading. Retail systematic trading is a near-zero-sum game
+against firms with better data, lower fees, and colocation; Chapter~10 makes
+that case in full. \texttt{qp} was built for two reasons instead:
+
+\begin{enumerate}
+  \item It is the portfolio artefact for an energy/commodity trading-desk
+  application -- a clean backtester and a market model map directly onto what
+  those roles actually do (Chapter~8 of the companion Mongolia blueprint;
+  Part~I of this document shows the mechanics).
+  \item It teaches market microstructure that compounds: no-look-ahead
+  discipline, realistic transaction costs, walk-forward validation, and why an
+  LSTM usually loses to a simple rule once costs are charged.
+\end{enumerate}
+
+\section*{What is in it}
+
+\begin{table}[h]
+\footnotesize
+\centering
+\begin{tabularx}{\textwidth}{L{2.6cm} X}
+\toprule
+\thh{Stage} & \thh{What it does} \\
+\midrule
+\texttt{config} & one YAML fully describes a run; typed \texttt{pydantic} models per stage \\
+\texttt{data} & \texttt{DataSource} contract: synthetic (deterministic default), CSV, yfinance, stooq; parquet cache \\
+\texttt{features} & causal technical indicators, token-resolved (\texttt{mom\_60}, \texttt{rsi\_14}); leak-free ML dataset builder \\
+\texttt{signals} & momentum, mean-reversion, cross-sectional momentum, a walk-forward ML model, an optional LSTM \\
+\texttt{validation} & walk-forward and purged $K$-fold splits with an embargo \\
+\texttt{backtest} & vectorised, one-bar execution lag, $\sqrt{w^\top\Sigma w}$ vol targeting, full cost model \\
+\texttt{risk} & per-name and gross exposure caps, a drawdown kill-switch with cooldown \\
+\texttt{execution} & a JSON-persisted paper broker (default); a real-broker adapter left as a deliberate stub \\
+\texttt{report} & a matplotlib tearsheet plus machine-readable metrics \\
+\texttt{live} & the pull~$\to$~features~$\to$~signal~$\to$~target~$\to$~reconcile~$\to$~orders loop \\
+\texttt{mcp} & the pipeline exposed as seven agent-callable tools \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section*{Headline result}
+
+On the bundled synthetic demo, a simple cross-sectional momentum rule delivers
+a Sharpe ratio of 0.62 after realistic costs; a gradient-boosted ML model on
+the same data, engineered to look attractive, delivers roughly $-0.1$. That gap
+is the point of this whole exercise, not an embarrassment: Chapter~8 shows the
+numbers and Chapter~10 explains why it is the expected and correct outcome.

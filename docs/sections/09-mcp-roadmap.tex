@@ -1,0 +1,60 @@
+\chapter{The Agent Layer: MCP, and What's Next}
+
+\section{Why an MCP server on top of a CLI}
+
+The CLI (\texttt{qp demo}, \texttt{qp backtest}, \texttt{qp walkforward}, \texttt{qp
+paper}) is sufficient for a human at a terminal. An agent needs the same
+capabilities as typed, discoverable tool calls rather than a stream of shell
+output to parse -- and once the pipeline speaks MCP, it is reachable from
+Claude Code, Claude Desktop, or any other MCP client (including, per the brief
+this project started from, an orchestration layer like Google Stitch) without
+writing a second integration.
+
+\section{What is exposed today}
+
+\begin{table}[h]
+\footnotesize
+\centering
+\begin{tabularx}{\textwidth}{L{4.6cm} X L{2.6cm}}
+\toprule
+\thh{Tool} & \thh{Effect} & \thh{Side effects} \\
+\midrule
+\texttt{describe\_pipeline()} & returns this project's README & none \\
+\texttt{list\_configs()} & lists \texttt{configs/*.yaml} & none \\
+\texttt{list\_runs()} & lists \texttt{runs/*} with Sharpe/CAGR/maxDD & none \\
+\texttt{run\_backtest(config\_path)} & full data$\to$features$\to$signal$\to$backtest$\to$tearsheet & writes \texttt{runs/<name>/} \\
+\texttt{get\_run\_report(name)} & plain-text metrics table & none \\
+\texttt{get\_tearsheet\_path(name)} & absolute path to the PNG & none \\
+\texttt{paper\_iteration(config\_path)} & one live-loop step against the paper broker & writes \texttt{execution\_state/} \\
+\bottomrule
+\end{tabularx}
+\caption{\texttt{mcp/server.py}, built on \texttt{FastMCP}. Registered for Claude
+Code via the project's \texttt{.mcp.json}. Nothing here can reach a real broker
+(Chapter~7).}
+\end{table}
+
+The server degrades gracefully: without the \texttt{mcp} package installed, it
+prints install instructions to stderr and exits 0 rather than raising inside an
+agent's tool-discovery call.
+
+\section{Roadmap}
+
+\begin{enumerate}
+  \item \textbf{Now.} Read-mostly tools above; an agent proposes configs and
+  reads results.
+  \item \textbf{Next -- \texttt{propose\_signal(description)}.} The calling agent
+  drafts a new \texttt{Signal} subclass from a natural-language description,
+  drops it into \texttt{src/qp/signals/}, registers it, and backtests it against
+  the existing baselines in one call.
+  \item \textbf{Next -- \texttt{sweep(param\_grid)}.} A walk-forward parameter
+  study across a grid (e.g.\ \texttt{lookback} $\in \{20, 60, 120\}$), returning
+  a ranked table -- the mechanical half of strategy research, delegated.
+  \item \textbf{Next -- \texttt{research\_report(run\_a, run\_b)}.} Diff two runs'
+  metrics, weights, and cost decomposition into a short markdown memo.
+  \item \textbf{Later -- real data \& a real signal.} Swap the \texttt{csv}
+  source for an ENTSO-E day-ahead export and add a power-market
+  \texttt{Signal} (features: load, wind/solar, and fuel-price forecasts; target:
+  the day-ahead$\leftrightarrow$intraday spread, or a storage-dispatch P\&L).
+  This reuses the PyPSA / OR-Tools background directly and is the artefact
+  described in Chapter~10 as the actual point of this project.
+\end{enumerate}

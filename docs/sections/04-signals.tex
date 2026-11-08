@@ -1,0 +1,76 @@
+\chapter{Signal Models}
+
+\section{The contract}
+
+Every signal implements \texttt{generate(close) -\/> DataFrame} of scores, same
+shape as \texttt{close}. A score is a ``desire to hold'' in roughly $[-1, 1]$;
+the portfolio layer (Chapter~6) turns scores into leverage- and risk-constrained
+weights. A signal marks itself \texttt{market\_neutral = True} when it already
+produces cross-sectionally demeaned scores.
+
+\section{Rule-based signals}
+
+\begin{table}[h]
+\footnotesize
+\centering
+\begin{tabularx}{\textwidth}{L{3.4cm} X}
+\toprule
+\thh{Signal} & \thh{Score} \\
+\midrule
+\texttt{Momentum} & $\tanh\!\big(\mathrm{mom}_n / \overline{|\mathrm{mom}_n|}_{252}\big)$, optionally divided by realised vol so noisier names are sized down \\
+\texttt{MeanReversion} & $-z_n / (2\cdot\text{entry\_z})$, clipped to $[-1,1]$: fade a stretched short-horizon z-score \\
+\texttt{CrossSectionalMomentum} & cross-sectional z-score of $\mathrm{mom}_n$, renormalised each day so $\sum_s |w_s| \approx 1$: long the relative winners, short the relative losers, market-neutral \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\texttt{CrossSectionalMomentum} is the pipeline's default and the one used for
+the headline demo result -- it is the closest rule-based analogue of the
+persistent per-symbol $\alpha_t$ injected into the synthetic data (Chapter~2),
+so it is the fairest baseline for the ML comparison in Chapter~8.
+
+\section{A walk-forward ML signal}
+
+\texttt{MLSignal} wraps a \texttt{scikit-learn} pipeline
+(\texttt{StandardScaler} + \texttt{HistGradientBoostingRegressor} by default) and
+trains it \emph{only} on the walk-forward splits described in Chapter~5: for
+each \texttt{(train\_start, train\_end, test\_start, test\_end)} window it fits
+on the training rows of the leak-free dataset from Chapter~3, predicts on the
+test rows, and stitches the out-of-sample predictions back into a wide panel.
+The cross-sectional z-score of that prediction becomes the score, exactly as in
+\texttt{CrossSectionalMomentum} -- so the two signals are compared on equal
+footing in Chapter~8: same sizing, same costs, same risk limits, different
+alpha source.
+
+\section{An optional sequence model}
+
+\texttt{SequenceSignal} is a single-layer LSTM over a rolling window of the same
+feature tokens, trained walk-forward with the same split logic:
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[node distance=9mm]
+  \node[stage] (in) {window of \\ $F$ features $\times$ $w$ days};
+  \node[stage, right=of in] (lstm) {LSTM \\ hidden size $h$};
+  \node[stage, right=of lstm] (head) {linear head};
+  \node[stage, right=of head] (out) {forward-return \\ prediction};
+  \draw[flowarr] (in)--(lstm); \draw[flowarr] (lstm)--(head); \draw[flowarr] (head)--(out);
+\end{tikzpicture}
+\caption{One (symbol, date) training example: the last $w$ days of the feature
+panel for that symbol, target = forward return over \texttt{horizon} days. The
+final hidden state feeds a linear head; only the last time step's output is
+used (\texttt{out[:, -1, :]}).}
+\end{figure}
+
+It requires \texttt{torch} and is import-guarded: without the \texttt{ml} extra
+installed, selecting \texttt{signal.type: sequence} raises a clear
+\texttt{ImportError} naming the alternatives, rather than crashing deep inside a
+training loop.
+
+\begin{caveat}
+This is included to \emph{learn the architecture and benchmark it honestly},
+not because it is expected to win. Chapter~10 explains why an LSTM over
+technical features is dominated by transaction costs and regime shift on real
+data far more often than it earns its keep. Never trust a sequence model's
+in-sample equity curve.
+\end{caveat}

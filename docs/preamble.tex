@@ -1,0 +1,142 @@
+% ============================================================
+%  preamble.tex -- qp pipeline technical documentation
+%  Engine: pdflatex.  Build via latexmk (see Makefile).
+% ============================================================
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{newpxtext}
+\usepackage{newpxmath}
+\usepackage[scaled=0.96]{inconsolata}
+\usepackage{microtype}
+
+\usepackage[a4paper,margin=2.6cm,top=2.9cm,bottom=2.9cm]{geometry}
+\usepackage{setspace}
+\setstretch{1.06}
+
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\setlist{itemsep=2pt,topsep=3pt,parsep=0pt}
+\usepackage{csquotes}
+\usepackage[most]{tcolorbox}
+
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,fit,backgrounds,calc,chains}
+
+\usepackage{listings}
+\usepackage{url}
+
+% ---------- palette (steel / signal-green, a trading-terminal feel) ----------
+\definecolor{QpInk}{HTML}{16202B}
+\definecolor{QpGrey}{HTML}{51606E}
+\definecolor{QpSteel}{HTML}{2C5B73}
+\definecolor{QpSteelDark}{HTML}{1E4152}
+\definecolor{QpGreen}{HTML}{2E7D5B}
+\definecolor{QpAmber}{HTML}{B07C2A}
+\definecolor{QpRed}{HTML}{9C463C}
+\definecolor{QpMist}{HTML}{ECEEF0}
+\definecolor{QpLine}{HTML}{D6DADE}
+\definecolor{QpCodeBg}{HTML}{101820}
+\definecolor{QpCodeFg}{HTML}{DCE6E8}
+\definecolor{QpCodeComment}{HTML}{7FA98E}
+\definecolor{QpCodeKeyword}{HTML}{E8B168}
+\definecolor{QpCodeString}{HTML}{9FC6D8}
+
+% ---------- headings ----------
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries\color{QpSteelDark}}
+  {\normalfont\Large\bfseries\color{QpAmber}\MakeUppercase{\chaptertitlename}\ \thechapter}
+  {8pt}{\Huge}
+\titlespacing*{\chapter}{0pt}{6pt}{28pt}
+\titleformat{\section}
+  {\normalfont\large\bfseries\color{QpSteelDark}}{\thesection}{0.8em}{}
+\titleformat{\subsection}
+  {\normalfont\normalsize\bfseries\color{QpInk}}{\thesubsection}{0.7em}{}
+
+% ---------- headers / footers ----------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancyhead[L]{\footnotesize\color{QpGrey}\nouppercase{\leftmark}}
+\fancyhead[R]{\footnotesize\color{QpGrey}qp -- pipeline documentation}
+\fancyfoot[C]{\thepage}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+% ---------- links ----------
+\usepackage[hidelinks,breaklinks=true]{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=QpSteelDark,
+  citecolor=QpAmber,
+  urlcolor=QpSteelDark,
+  pdftitle={qp: A Systematic Trading Research Pipeline},
+  pdfauthor={Batbandi Gerelkhuu}
+}
+\usepackage{bookmark}
+
+% ---------- tables ----------
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\Centering\arraybackslash}p{#1}}
+\renewcommand{\arraystretch}{1.28}
+\newcommand{\thh}[1]{\textbf{\textcolor{QpSteelDark}{#1}}}
+
+% ---------- callouts ----------
+\newtcolorbox{designnote}[1][]{
+  enhanced, breakable, colback=QpMist, colframe=QpSteel,
+  boxrule=0pt, leftrule=3pt, arc=1pt, left=10pt, right=10pt, top=8pt, bottom=8pt,
+  fonttitle=\bfseries\color{QpSteelDark}, title={Design rationale}, #1 }
+
+\newtcolorbox{caveat}[1][]{
+  enhanced, breakable, colback=QpMist, colframe=QpRed,
+  boxrule=0pt, leftrule=3pt, arc=1pt, left=10pt, right=10pt, top=8pt, bottom=8pt,
+  fonttitle=\bfseries\color{QpRed}, title={Honest caveat}, #1 }
+
+\newtcolorbox{cli}[1][]{
+  enhanced, breakable, colback=QpCodeBg, colframe=QpCodeBg,
+  arc=2pt, left=10pt, right=10pt, top=7pt, bottom=7pt,
+  fontupper=\ttfamily\small\color{QpCodeFg}, #1 }
+
+\newcommand{\keyline}[1]{%
+  \par\vspace{4pt}{\itshape\color{QpSteelDark}#1}\par\vspace{4pt}}
+
+% ---------- code listings (Python) ----------
+\lstdefinestyle{qpy}{
+  backgroundcolor=\color{QpCodeBg},
+  basicstyle=\ttfamily\footnotesize\color{QpCodeFg},
+  keywordstyle=\color{QpCodeKeyword}\bfseries,
+  commentstyle=\color{QpCodeComment}\itshape,
+  stringstyle=\color{QpCodeString},
+  numbers=left, numberstyle=\tiny\color{QpGrey}, numbersep=8pt,
+  breaklines=true, showstringspaces=false, tabsize=4,
+  frame=none, xleftmargin=1.2em, framexleftmargin=1em,
+  language=Python,
+  columns=fullflexible,
+  aboveskip=8pt, belowskip=8pt,
+}
+\lstset{style=qpy}
+
+% ---------- tikz styles for architecture diagrams ----------
+\tikzset{
+  stage/.style={
+    rectangle, rounded corners=2pt, draw=QpSteel, line width=0.8pt,
+    fill=QpMist, text=QpInk, align=center, inner sep=7pt,
+    font=\small\bfseries, minimum height=1.05cm, minimum width=2.6cm },
+  stagealt/.style={
+    rectangle, rounded corners=2pt, draw=QpAmber, line width=0.9pt,
+    fill=QpAmber!12, text=QpInk, align=center, inner sep=7pt,
+    font=\small\bfseries, minimum height=1.05cm, minimum width=2.6cm },
+  flowarr/.style={-{Stealth[length=2.6mm]}, line width=0.9pt, draw=QpGrey },
+  note/.style={ font=\scriptsize\itshape, text=QpGrey, align=center },
+}

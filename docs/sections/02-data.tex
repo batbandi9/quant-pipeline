@@ -1,0 +1,100 @@
+\chapter{The Data Layer}
+
+\section{Contract}
+
+Every source implements \texttt{DataSource.fetch(symbols, start, end) -\/> DataFrame}
+and returns a long OHLCV frame validated against one schema:
+
+\begin{table}[h]
+\footnotesize
+\centering
+\begin{tabularx}{\textwidth}{L{2.2cm} X}
+\toprule
+\thh{Column} & \thh{Meaning} \\
+\midrule
+\texttt{date} & trading date (parsed to \texttt{datetime64}) \\
+\texttt{symbol} & instrument identifier \\
+\texttt{open, high, low, close} & prices; \texttt{close} is adjusted where the source provides it \\
+\texttt{volume} & traded volume \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\texttt{DataSource.\_validate} enforces the schema, sorts by \texttt{(symbol, date)},
+and rejects non-positive prices before any downstream code sees the frame.
+\texttt{qp.data.store.load\_prices} wraps a source with a content-addressed
+parquet cache: the config's data section is hashed, and a repeat run with an
+identical configuration reads from disk instead of re-fetching.
+
+\section{Four sources, one always working}
+
+\begin{table}[h]
+\footnotesize
+\centering
+\begin{tabularx}{\textwidth}{L{2.6cm} X}
+\toprule
+\thh{Source} & \thh{Notes} \\
+\midrule
+\texttt{synthetic} & default; zero dependencies, zero network, deterministic given a seed. Used by every test and the demo. \\
+\texttt{csv} & one file per symbol under \texttt{data.csv\_dir}; the robust path for real historical data (e.g.\ an ENTSO-E export). \\
+\texttt{yfinance} & guarded optional import (\texttt{pip install "qp[data]"}); degrades to a clear \texttt{ImportError} rather than a broken run. \\
+\texttt{stooq} & stdlib-only HTTP fetch; best-effort, since stooq's endpoint has started serving a bot-check page from some networks. \\
+\bottomrule
+\end{tabularx}
+\caption{The pipeline never depends on network access to run its tests or its demo.}
+\end{table}
+
+\section{The synthetic generator}
+
+Real market data cannot be committed to a repository and real free APIs are
+unreliable enough to break a demo. \texttt{qp.data.synthetic.SyntheticSource}
+solves both problems and, deliberately, does one more job: it injects a
+\emph{known, controllable} amount of predictable structure so the rest of the
+pipeline has something real to find.
+
+For $k$ symbols over $n$ trading days, log-returns follow a correlated
+geometric Brownian motion with a slow-moving, per-symbol drift component:
+
+\begin{align}
+  r_t &= \left(\mu_t + \alpha_t - \tfrac{1}{2}\sigma_t^2\right)\Delta t
+         + \sigma_t \sqrt{\Delta t}\; L\, z_t, \qquad z_t \sim \mathcal N(0, I_k) \\
+  \alpha_t &= \phi\, \alpha_{t-1} + \varepsilon_t, \qquad \varepsilon_t \sim \mathcal N(0, \eta^2 I_k)
+\end{align}
+
+where $\Delta t = 1/252$, $L$ is the Cholesky factor of a correlation matrix
+with off-diagonal $\rho$ (a one-factor structure: every pair of symbols shares
+correlation $\rho$), and $(\mu_t, \sigma_t)$ follow a regime path that switches
+between hand-tuned \emph{bull}, \emph{bear}, and \emph{chop} states (durations
+drawn from $\mathcal N(\text{mean length}, 0.25\cdot\text{mean length})$, floored
+at 20 days). $\alpha_t$ is an AR(1) process per symbol with $\phi = 0.99$
+(half-life $\approx 69$ trading days) -- the only genuinely forecastable
+structure in the data, and the reason a momentum or ML signal has anything real
+to capture. OHLC and volume are then simulated around each simulated close with
+independent intraday noise.
+
+\begin{table}[h]
+\footnotesize
+\centering
+\begin{tabularx}{\textwidth}{L{3cm} X}
+\toprule
+\thh{Parameter} & \thh{Demo value} \\
+\midrule
+$\mu$ (baseline drift) & 6\%/year, regime-modulated \\
+$\sigma$ (baseline vol) & 20\%/year, regime-modulated \\
+$\rho$ (pairwise correlation) & 0.3 \\
+$\phi$ (alpha persistence) & 0.99 \\
+$\eta$, alpha scale & 0.08 innovation std, $\times 0.22$ overall \\
+\bottomrule
+\end{tabularx}
+\caption{\texttt{configs/demo.yaml -> data.synthetic}. Every value is a config
+knob; \texttt{qp demo} fixes them to produce a reproducible Sharpe~0.62 for
+cross-sectional momentum (Chapter~8).}
+\end{table}
+
+\begin{caveat}
+The alpha scale (0.22) is chosen so the demo is legible, not because it
+resembles a real single-name equity anomaly. A genuine, persistent,
+easily-captured 69-day alpha of this magnitude does not exist in liquid public
+markets; if it did, it would already be arbitraged away. Treat every number in
+Chapter~8 as a statement about the code, not about markets.
+\end{caveat}

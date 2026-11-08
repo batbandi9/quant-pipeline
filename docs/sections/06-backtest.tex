@@ -1,0 +1,121 @@
+\chapter{The Backtest Engine}
+
+\section{Timeline convention}
+
+The single most common source of an inflated backtest is look-ahead: using
+information at bar $t$ that would not actually have been known at bar $t$. The
+engine enforces one convention everywhere:
+
+\begin{enumerate}
+  \item scores and target weights for bar $t$ are computed from data available
+  \emph{at the close} of bar $t$;
+  \item those weights are \emph{held over} $t \to t+1$ (a one-bar execution lag:
+  \texttt{held = target\_w.shift(1)});
+  \item realised return over that bar is \texttt{held * asset\_return}, i.e.\
+  yesterday's decision earns today's return, never today's decision earning
+  today's return.
+\end{enumerate}
+
+\texttt{tests/test\_backtest.py::test\_no\_lookahead\_one\_bar\_lag} encodes this
+as a unit test: a score that only exists on the final bar of the sample can
+have no effect on that bar's return, because there is no bar $t+1$ to hold it
+into.
+
+\section{Position sizing}
+
+Three sizing schemes share one pipeline: build raw scores, cap per name, project
+to long-only if configured, then renormalise to the target gross leverage.
+
+\paragraph{Fixed.} Weights proportional to score, renormalised to
+\texttt{gross\_leverage}. No volatility adjustment.
+
+\paragraph{Risk parity.} $w_s \propto \mathrm{sign}(\text{score}_s)/\sigma_s$
+before the same renormalisation -- equal risk contribution per name under the
+(strong) assumption of no cross-correlation.
+
+\paragraph{Volatility targeting.} The book is scaled each day so its
+\emph{ex-ante} volatility tracks a target:
+
+\begin{equation}
+  \sigma_{\text{port},t} = \sqrt{w_t^\top \Sigma_t\, w_t}\,\sqrt{252},
+  \qquad
+  w_t \leftarrow w_t \cdot \min\!\left(\frac{\sigma_{\text{target}}}{\sigma_{\text{port},t}},\; \kappa_{\max}\right)
+\end{equation}
+
+where $\Sigma_t$ is a rolling sample covariance of daily returns
+(\texttt{vol\_lookback} days) and $\kappa_{\max}$
+(\texttt{max\_leverage\_scale}) caps the multiplier so a quiet-market estimate
+of $\Sigma_t$ cannot imply arbitrary leverage. This is computed from the
+\emph{portfolio} covariance, not a sum of individual-name volatilities --
+it therefore correctly rewards diversification and long/short netting: a
+market-neutral book with two highly correlated offsetting legs is recognised
+as low-risk, which a naive $\sum_s |w_s|\sigma_s$ proxy would not capture.
+
+\begin{table}[h]
+\footnotesize
+\centering
+\begin{tabularx}{\textwidth}{L{4.4cm} X}
+\toprule
+\thh{Config knob} & \thh{Effect} \\
+\midrule
+\texttt{target\_vol} & annualised target for $\sigma_{\text{port}}$ \\
+\texttt{max\_weight} & per-name cap, applied before and after vol scaling \\
+\texttt{gross\_leverage} & the leverage the raw (pre-vol-scale) book normalises to \\
+\texttt{vol\_lookback} & window for $\Sigma_t$ \\
+\texttt{max\_leverage\_scale} & ceiling on the vol-target multiplier $\kappa$ \\
+\texttt{rebalance} & \texttt{daily} / \texttt{weekly} / \texttt{monthly}; weights hold between rebalance dates \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Cost model}
+
+Turnover is the $L^1$ change in \emph{target} weight between consecutive bars,
+$\tau_t = \sum_s |w_{s,t} - w_{s,t-1}|$. Costs charged against gross return:
+
+\begin{align}
+  \text{transaction cost}_t &= \tau_t \times \frac{\text{commission}_{\text{bps}} + \text{spread}_{\text{bps}} + \text{slippage}_{\text{bps}}}{10^4} \\
+  \text{borrow cost}_t &= \Big(\sum_{s:\, w_{s,t}<0} |w_{s,t}|\Big) \times \frac{\text{borrow}_{\text{bps/yr}}}{10^4 \times 252}
+\end{align}
+
+Net return is \texttt{gross - transaction\_cost - borrow\_cost}. The tearsheet
+(Chapter~7) plots the cumulative decomposition of all three terms so a
+strategy's apparent edge can be checked against how much of it costs eat.
+
+\section{Risk limits and the drawdown kill-switch}
+
+Pre-trade, \texttt{risk.limits.apply\_limits} clips each name to
+\texttt{max\_position} and rescales the whole book if gross exposure exceeds
+\texttt{max\_gross}. Separately, the engine runs a drawdown kill-switch on the
+realised net-return series:
+
+\begin{quote}
+\small\ttfamily
+track running equity and its peak; the moment drawdown breaches
+\texttt{max\_drawdown\_stop}, flatten the book (zero return, zero weight) for a
+fixed \texttt{cooldown} (21 trading days by default); reset the peak on resume.
+\end{quote}
+
+This models a real risk desk's behaviour more faithfully than an instantaneous
+recovery rule would: after a real stop-out, a desk does not resume risk the
+instant equity happens to tick back up -- it sits out a cooldown period and
+restarts clean.
+
+\section{Metrics}
+
+\texttt{qp.backtest.metrics.summary} reports, from the daily net-return series
+$r_t$ (252 trading days/year):
+
+\begin{align*}
+  \text{CAGR} &= \Big(\textstyle\prod_t (1+r_t)\Big)^{252/N} - 1
+  &\text{Sharpe} &= \sqrt{252}\,\dfrac{\overline{r_t - r_f/252}}{\mathrm{sd}(r_t - r_f/252)} \\
+  \text{Sortino} &= \sqrt{252}\,\dfrac{\overline{r_t - r_f/252}}{\mathrm{sd}\big((r_t-r_f/252)^-\big)}
+  &\text{Calmar} &= \dfrac{\text{CAGR}}{|\text{max drawdown}|} \\
+  \text{VaR}_{95} &= Q_{0.05}(r_t)
+  &\text{CVaR}_{95} &= \mathbb E[r_t \mid r_t \le \text{VaR}_{95}]
+\end{align*}
+
+plus hit rate, skew, kurtosis, best/worst day, and -- when a weights panel is
+supplied -- average gross/net exposure, average daily turnover, and time in
+market. This is the same dictionary written to \texttt{metrics.json} for every
+run and read back by the MCP \texttt{list\_runs} tool (Chapter~9).

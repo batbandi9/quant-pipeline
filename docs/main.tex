@@ -1,0 +1,56 @@
+\documentclass[11pt,openany]{report}
+
+\input{preamble}
+
+\title{\vspace{-1.5cm}
+  {\color{QpAmber}\large\bfseries TECHNICAL DOCUMENTATION}\\[6pt]
+  {\color{QpSteelDark}\Huge\bfseries qp: A Systematic Trading\\ Research Pipeline}\\[10pt]
+  {\color{QpInk}\large Architecture, Design Rationale, and First Results}}
+\author{Batbandi Gerelkhuu}
+\date{Compiled 4 September 2026 \quad$\cdot$\quad v0.1.0}
+
+\begin{document}
+
+\pagenumbering{roman}
+\maketitle
+\thispagestyle{empty}
+
+\begin{center}
+\begin{minipage}{0.86\textwidth}
+\small\itshape\color{QpGrey}
+This document describes a research and paper-trading system, not a live trading
+strategy. Every headline number in Chapter~8 is measured on synthetic data with
+an injected, exaggerated signal so the machinery is visible end to end --- it is
+not evidence that the included strategies make money on real markets. See
+Chapter~10 for the caveats this document insists you read.
+\end{minipage}
+\end{center}
+
+\vfill
+\noindent\rule{\textwidth}{0.4pt}\\[2pt]
+{\footnotesize\color{QpGrey}Repository: \texttt{quant-pipeline/} (sibling to the
+Mongolia blueprint and the PyPSA thesis work). Code: \texttt{src/qp/}. Tests:
+\texttt{tests/} (13 passing). Agent layer: \texttt{mcp/server.py}.}
+
+\clearpage
+\tableofcontents
+\clearpage
+
+\pagenumbering{arabic}
+
+\input{sections/00-exec-summary}
+\input{sections/01-architecture}
+\input{sections/02-data}
+\input{sections/03-features}
+\input{sections/04-signals}
+\input{sections/05-validation}
+\input{sections/06-backtest}
+\input{sections/07-execution-live}
+\input{sections/08-results}
+\input{sections/09-mcp-roadmap}
+\input{sections/10-limitations}
+
+\appendix
+\input{sections/99-appendix}
+
+\end{document}

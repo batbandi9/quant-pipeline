@@ -1,0 +1,51 @@
+# Walk-forward ML signal. `qp backtest -c configs/ml_walkforward.yaml`
+# or `qp walkforward -c configs/ml_walkforward.yaml` to compare against rules.
+name: ml_wf
+seed: 11
+
+data:
+  source: synthetic
+  symbols: [AAA, BBB, CCC, DDD, EEE, FFF, GGG, HHH]
+  start: "2014-01-01"
+  end: "2024-12-31"
+  synthetic:
+    mu: 0.05
+    sigma: 0.22
+    regime_switch: true
+    corr: 0.25
+
+features: [ret_1, vol_20, mom_20, mom_60, mom_120, rsi_14, zscore_10, zscore_20, macd, bbp_20, skew_60]
+
+signal:
+  type: ml
+  params:
+    horizon: 5
+
+portfolio:
+  sizing: vol_target
+  target_vol: 0.10
+  max_weight: 0.25
+  gross_leverage: 1.0
+  long_only: false
+  rebalance: daily
+
+costs:
+  commission_bps: 1.0
+  half_spread_bps: 2.0
+  borrow_bps_annual: 50.0
+
+risk:
+  max_drawdown_stop: 0.30
+  max_gross: 1.5
+  max_position: 0.30
+
+validation:
+  scheme: walk_forward
+  train_days: 756
+  test_days: 126
+  step_days: 126
+  embargo_days: 5
+
+execution:
+  broker: paper
+  starting_equity: 100000
